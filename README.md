@@ -1,4 +1,4 @@
-# FileSearch Pro - Java 21 Swing Edition
+# DocSearch Pro - Java 21 Swing Edition
 
 A desktop file search utility ported from the Python/PyQt version to **Java 21 LTS** and **Java Swing** with the modern **FlatLaf Dark Theme**.
 
