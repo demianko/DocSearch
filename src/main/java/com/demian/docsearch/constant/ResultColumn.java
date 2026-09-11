@@ -1,10 +1,11 @@
 package com.demian.docsearch.constant;
 
 public enum ResultColumn {
-    NAME(0, "Name", "name", 600, true),
-    YEAR(1, "Year", "year", 70, false),
-    DATE_MODIFIED(2, "Date Modified", "modified", 140, false),
-    DIRECTORY_PATH(3, "Directory Path", "path", 280, true);
+    INDEX(0, AppConstants.COL_INDEX, "index", 55, true),
+    NAME(1, AppConstants.COL_NAME, AppConstants.SORT_NAME, 560, true),
+    YEAR(2, AppConstants.COL_YEAR, AppConstants.SORT_YEAR, 70, false),
+    DATE_MODIFIED(3, AppConstants.COL_DATE_MODIFIED, AppConstants.SORT_MODIFIED, 140, false),
+    DIRECTORY_PATH(4, AppConstants.COL_DIRECTORY_PATH, AppConstants.SORT_PATH, 280, true);
 
     private final int modelIndex;
     private final String header;

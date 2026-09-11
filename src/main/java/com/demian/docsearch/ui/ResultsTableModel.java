@@ -1,6 +1,7 @@
 package com.demian.docsearch.ui;
 
 import com.demian.docsearch.constant.AppConstants;
+import com.demian.docsearch.constant.ResultColumn;
 import com.demian.docsearch.model.FileItem;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,17 +62,26 @@ extends AbstractTableModel {
     }
 
     @Override
+    public Class<?> getColumnClass(int columnIndex) {
+        if (columnIndex == ResultColumn.INDEX.modelIndex()) {
+            return Integer.class;
+        }
+        return String.class;
+    }
+
+    @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
         FileItem item = this.getItem(rowIndex);
         if (item == null) {
             return "";
         }
-        return switch (columnIndex) {
-            case 0 -> item.nameDisplay();
-            case 1 -> item.yearDisplay();
-            case 2 -> item.dateModifiedStr();
-            case 3 -> item.parentStr();
-            default -> "";
+        ResultColumn col = ResultColumn.fromIndex(columnIndex);
+        return switch (col) {
+            case INDEX -> rowIndex + 1;
+            case NAME -> item.nameDisplay();
+            case YEAR -> item.yearDisplay();
+            case DATE_MODIFIED -> item.dateModifiedStr();
+            case DIRECTORY_PATH -> item.parentStr();
         };
     }
 }

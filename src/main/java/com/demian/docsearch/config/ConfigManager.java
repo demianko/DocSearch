@@ -52,9 +52,7 @@ public class ConfigManager {
     }
 
     public void save(AppConfig config) {
-        if (config == null) {
-            return;
-        }
+        if (config == null) return;
         try {
             if (this.configPath.getParent() != null) {
                 Files.createDirectories(this.configPath.getParent(), new FileAttribute[0]);

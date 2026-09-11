@@ -59,6 +59,8 @@ import javax.swing.SwingWorker;
 import javax.swing.TransferHandler;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.SwingConstants;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -73,7 +75,7 @@ extends JFrame {
     private JTextField txtLimit;
     private JButton btnSearch;
     private JButton btnStop;
-    private int currentSortColumn = 2;
+    private int currentSortColumn = ResultColumn.DATE_MODIFIED.modelIndex();
     private boolean sortAscending = false;
     private JTextField txtFilter;
     private JProgressBar progressBar;
@@ -235,10 +237,11 @@ extends JFrame {
         gbc.gridx = 1;
         gbc.weightx = 1.0;
         gbc.insets = new Insets(0, 0, 0, 2);
-        this.txtFilter = new JTextField(this.config.getFilterResult());
+        this.txtFilter = new JTextField();
         this.txtFilter.setPreferredSize(new Dimension(200, 30));
         this.txtFilter.putClientProperty("JTextField.placeholderText", "Type to filter displayed items instantly (supports '|', 'NOT', '*', '?')...");
         this.txtFilter.putClientProperty("JTextField.showClearButton", true);
+        this.txtFilter.addActionListener(e -> this.applyLiveFilter());
         this.txtFilter.getDocument().addDocumentListener(new DocumentListener(){
 
             @Override
@@ -273,6 +276,10 @@ extends JFrame {
         for (ResultColumn col : ResultColumn.values()) {
             this.resultsTable.getColumnModel().getColumn(col.modelIndex()).setPreferredWidth(col.defaultWidth());
         }
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+        this.resultsTable.getColumnModel().getColumn(ResultColumn.INDEX.modelIndex()).setCellRenderer(centerRenderer);
+        this.resultsTable.getColumnModel().getColumn(ResultColumn.INDEX.modelIndex()).setMaxWidth(75);
         this.resultsTable.getTableHeader().setCursor(Cursor.getPredefinedCursor(12));
         this.resultsTable.getTableHeader().addMouseListener(new MouseAdapter(){
 
@@ -455,8 +462,7 @@ extends JFrame {
         List<FileItem> sorted = FileSearchEngine.sortResults(items, criteria, !this.sortAscending);
         this.allResults.clear();
         this.allResults.addAll(sorted);
-        this.tableModel.setItems(sorted);
-        this.lblCount.setText(sorted.size() + " items");
+        this.applyLiveFilter();
         this.lblStatus.setText("Viewing folder: " + String.valueOf(folder.getFileName()));
     }
 
@@ -557,14 +563,24 @@ extends JFrame {
                             "Completed in %.2fs (Found %,d files in '%s')",
                             elapsedSec, DocSearchApp.this.allResults.size(), rootFolder.getFileName()));
                 }
-                if (!DocSearchApp.this.allResults.isEmpty() && (DocSearchApp.this.currentSortColumn != 2 || DocSearchApp.this.sortAscending)) {
+                try {
+                    List<FileItem> searchResults = this.get();
+                    if (searchResults != null) {
+                        DocSearchApp.this.allResults.clear();
+                        DocSearchApp.this.allResults.addAll(searchResults);
+                    }
+                }
+                catch (Exception ignored) {
+                }
+                if (!DocSearchApp.this.allResults.isEmpty()
+                        && (DocSearchApp.this.currentSortColumn != ResultColumn.DATE_MODIFIED.modelIndex()
+                        || DocSearchApp.this.sortAscending)) {
                     String criteria = DocSearchApp.this.getSortCriteria(DocSearchApp.this.currentSortColumn);
                     List<FileItem> sorted = FileSearchEngine.sortResults(DocSearchApp.this.allResults, criteria, !DocSearchApp.this.sortAscending);
                     DocSearchApp.this.allResults.clear();
                     DocSearchApp.this.allResults.addAll(sorted);
-                    DocSearchApp.this.applyLiveFilter();
                 }
-                DocSearchApp.this.lblCount.setText(DocSearchApp.this.allResults.size() + " files found");
+                DocSearchApp.this.applyLiveFilter();
             }
         };
         this.activeSearchWorker.execute();
@@ -580,6 +596,17 @@ extends JFrame {
         this.progressBar.setIndeterminate(false);
     }
 
+    private boolean matchesFilter(FileItem item, QueryParser.ParsedQuery parsed) {
+        if (item == null) return false;
+        List<String> candidates = new ArrayList<>();
+        if (StringUtils.isNotEmpty(item.name())) candidates.add(item.name());
+        if (StringUtils.isNotEmpty(item.parentStr())) candidates.add(item.parentStr());
+        if (item.path() != null) candidates.add(item.path().toString());
+        if (StringUtils.isNotEmpty(item.publisher())) candidates.add(item.publisher());
+        if (item.year() > 0) candidates.add(String.valueOf(item.year()));
+        return QueryMatcher.matchesAny(candidates, parsed.rules(), parsed.globalExcludes());
+    }
+
     private void applyLiveFilter() {
         String filterText = StringUtils.trimToEmpty(this.txtFilter.getText());
         if (StringUtils.isEmpty(filterText)) {
@@ -589,7 +616,7 @@ extends JFrame {
         }
         QueryParser.ParsedQuery parsed = QueryParser.parse(filterText);
         List<FileItem> filtered = this.allResults.stream()
-                .filter(item -> QueryMatcher.matches(item.name(), parsed.rules(), parsed.globalExcludes()))
+                .filter(item -> this.matchesFilter(item, parsed))
                 .toList();
         this.tableModel.setItems(filtered);
         this.lblCount.setText(filtered.size() + " / " + this.allResults.size() + " items");
@@ -693,7 +720,7 @@ extends JFrame {
     }
 
     private void sortByColumn(int col) {
-        if (this.allResults.isEmpty()) {
+        if (this.allResults.isEmpty() || col == ResultColumn.INDEX.modelIndex()) {
             return;
         }
         int selectedRow = this.resultsTable.getSelectedRow();
@@ -727,7 +754,7 @@ extends JFrame {
             TableColumn col = this.resultsTable.getColumnModel().getColumn(i);
             int modelIdx = col.getModelIndex();
             String base = ResultColumn.fromIndex(modelIdx).header();
-            if (modelIdx == activeCol) {
+            if (modelIdx == activeCol && modelIdx != ResultColumn.INDEX.modelIndex()) {
                 col.setHeaderValue(base + (ascending ? "  \u25b2" : "  \u25bc"));
                 continue;
             }
@@ -740,7 +767,6 @@ extends JFrame {
         this.config.setDirectory(this.txtFolder.getText().trim());
         this.config.setPattern(this.txtPatterns.getText().trim());
         this.config.setExtension(this.txtExtensions.getText().trim());
-        this.config.setFilterResult(this.txtFilter.getText().trim());
         try {
             String lim = this.txtLimit.getText().trim();
             this.config.setLimit(lim.isEmpty() ? 0 : Integer.parseInt(lim));

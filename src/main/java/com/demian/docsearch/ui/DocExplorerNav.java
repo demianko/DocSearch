@@ -260,20 +260,16 @@ extends JPanel {
     }
 
     public void selectPath(Path targetPath, boolean expandTarget) {
-        if (targetPath == null || !Files.exists(targetPath, new LinkOption[0])) {
-            return;
-        }
+        if (targetPath == null || !Files.exists(targetPath, new LinkOption[0])) return;
+        
         Path normTarget = targetPath.toAbsolutePath().normalize();
         Path root = normTarget.getRoot();
-        if (root == null) {
-            return;
-        }
+        if (root == null) return;
+        
         this.suppressSelectEvent = true;
         try {
             DefaultMutableTreeNode currentNode = this.pathToNodeMap.get(root);
-            if (currentNode == null) {
-                return;
-            }
+            if (currentNode == null) return;
             this.tree.expandPath(new TreePath(currentNode.getPath()));
             this.expandNodeLazily(currentNode);
             int nameCount = normTarget.getNameCount();

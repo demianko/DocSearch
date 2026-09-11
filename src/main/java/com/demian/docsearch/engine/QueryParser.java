@@ -11,20 +11,22 @@ import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.lang3.StringUtils;
 
 public class QueryParser {
-    private static final Pattern NOT_PREFIX = Pattern.compile("^NOT\\s+", 2);
-    private static final Pattern INLINE_NOT_SPLIT = Pattern.compile("\\s+NOT\\s+", 2);
-    private static final Pattern EXCLUDE_DELIMITERS = Pattern.compile("\\s+(?:and\\s+not|&\\s*not|and|not|&)\\s+", 2);
+    private static final int REGEX_FLAGS = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
+    private static final Pattern NOT_PREFIX = Pattern.compile("^NOT\\s+", REGEX_FLAGS);
+    private static final Pattern INLINE_NOT_SPLIT = Pattern.compile("\\s+NOT\\s+", REGEX_FLAGS);
+    private static final Pattern EXCLUDE_DELIMITERS = Pattern.compile(
+            "\\s+(?:and\\s+not|&\\s*not|and|not|&)\\s+", REGEX_FLAGS);
 
     public static Pattern termToRegex(String termStr) {
         if (StringUtils.isBlank(termStr)) {
-            return Pattern.compile(".*", 2);
+            return Pattern.compile(".*", REGEX_FLAGS);
         }
-        String raw = StringUtils.trimToEmpty(termStr);
+        String raw = stripQuotes(StringUtils.trimToEmpty(termStr));
         raw = raw.replaceAll("\\s*\\*\\s*", "*").replaceAll("\\s*\\?\\s*", "?");
         String[] branches = StringUtils.split(raw, '|');
         ArrayList<String> branchRegexes = new ArrayList<String>();
         for (String branch : branches) {
-            String b = StringUtils.trimToEmpty(branch);
+            String b = stripQuotes(StringUtils.trimToEmpty(branch));
             if (StringUtils.isEmpty(b)) continue;
             StringBuilder branchBuilder = new StringBuilder();
             int len = b.length();
@@ -50,11 +52,23 @@ public class QueryParser {
                 ? "(?:" + StringUtils.join(branchRegexes, "|") + ")"
                 : (CollectionUtils.isNotEmpty(branchRegexes) ? branchRegexes.getFirst() : ".*");
         try {
-            return Pattern.compile(fullRegex, 2);
+            return Pattern.compile(fullRegex, REGEX_FLAGS);
         }
         catch (PatternSyntaxException e) {
-            return Pattern.compile(Pattern.quote(raw), 2);
+            return Pattern.compile(Pattern.quote(raw), REGEX_FLAGS);
         }
+    }
+
+    private static String stripQuotes(String str) {
+        if (StringUtils.isEmpty(str)) return str;
+        String s = str.trim();
+        while (s.length() > 0 && (s.startsWith("\"") || s.startsWith("'"))) {
+            s = s.substring(1).trim();
+        }
+        while (s.length() > 0 && (s.endsWith("\"") || s.endsWith("'"))) {
+            s = s.substring(0, s.length() - 1).trim();
+        }
+        return s;
     }
 
     private static String quoteWithSpaceWordSeparators(String text) {
@@ -65,21 +79,21 @@ public class QueryParser {
         boolean trailingSpace = text.length() > 1 && text.endsWith(" ");
         String trimmed = StringUtils.trimToEmpty(text);
         if (StringUtils.isEmpty(trimmed)) {
-            return "[\\s._\\-+]+";
+            return "[\\s._\\-+/\\\\]+";
         }
         String[] tokens = StringUtils.split(trimmed);
         StringBuilder sb = new StringBuilder();
         if (leadingSpace) {
-            sb.append("[\\s._\\-+]+");
+            sb.append("[\\s._\\-+/\\\\]+");
         }
         for (int i = 0; i < tokens.length; ++i) {
             if (i > 0) {
-                sb.append("[\\s._\\-+]+");
+                sb.append("[\\s._\\-+/\\\\]+");
             }
             sb.append(Pattern.quote(tokens[i]));
         }
         if (trailingSpace) {
-            sb.append("[\\s._\\-+]+");
+            sb.append("[\\s._\\-+/\\\\]+");
         }
         return sb.toString();
     }
@@ -97,6 +111,7 @@ public class QueryParser {
         for (String part : parts) {
             String clean = StringUtils.trimToEmpty(part);
             if (StringUtils.isEmpty(clean) || !StringUtils.isNotEmpty(clean = clean.replaceAll("^(?i:NOT\\s+|-)", "").trim())) continue;
+            clean = stripQuotes(clean);
             regexes.add(QueryParser.termToRegex(clean));
         }
         return regexes;
@@ -114,21 +129,21 @@ public class QueryParser {
             String clause = StringUtils.trimToEmpty(raw);
             if (StringUtils.isEmpty(clause)) continue;
             if (clause.startsWith("-")) {
-                clean = StringUtils.trimToEmpty(clause.substring(1));
+                clean = stripQuotes(StringUtils.trimToEmpty(clause.substring(1)));
                 if (!StringUtils.isNotEmpty(clean)) continue;
                 globalExcludes.addAll(QueryParser.parseExcludeTerms(clean));
                 continue;
             }
             if (NOT_PREFIX.matcher(clause).find()) {
-                clean = StringUtils.trimToEmpty(NOT_PREFIX.matcher(clause).replaceFirst(""));
+                clean = stripQuotes(StringUtils.trimToEmpty(NOT_PREFIX.matcher(clause).replaceFirst("")));
                 if (!StringUtils.isNotEmpty(clean)) continue;
                 globalExcludes.addAll(QueryParser.parseExcludeTerms(clean));
                 continue;
             }
             String[] notParts = INLINE_NOT_SPLIT.split(clause, 2);
             if (notParts.length == 2) {
-                String incStr = StringUtils.trimToEmpty(notParts[0]);
-                String excStr = StringUtils.trimToEmpty(notParts[1]);
+                String incStr = stripQuotes(StringUtils.trimToEmpty(notParts[0]));
+                String excStr = stripQuotes(StringUtils.trimToEmpty(notParts[1]));
                 Pattern incRx = StringUtils.isNotEmpty(incStr) ? QueryParser.termToRegex(incStr) : null;
                 List<Pattern> excRxs = StringUtils.isNotEmpty(excStr) ? QueryParser.parseExcludeTerms(excStr) : List.of();
                 rules.add(new SearchRule(incRx, excRxs));

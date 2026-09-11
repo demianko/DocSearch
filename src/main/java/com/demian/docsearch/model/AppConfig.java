@@ -10,19 +10,17 @@ public class AppConfig {
     private String sortOrder = "modified";
     private String publisher = "";
     private int limit = 0;
-    private String filterResult = "";
 
     public AppConfig() {
     }
 
-    public AppConfig(String directory, String pattern, String extension, String sortOrder, String publisher, int limit, String filterResult) {
+    public AppConfig(String directory, String pattern, String extension, String sortOrder, String publisher, int limit) {
         this.directory = directory != null ? directory : "";
         this.pattern = pattern != null ? pattern : "";
         this.extension = extension != null ? extension : "";
         this.sortOrder = sortOrder != null ? sortOrder : "modified";
         this.publisher = publisher != null ? publisher : "";
         this.limit = Math.max(0, limit);
-        this.filterResult = filterResult != null ? filterResult : "";
     }
 
     public String getDirectory() {
@@ -71,14 +69,6 @@ public class AppConfig {
 
     public void setLimit(int limit) {
         this.limit = limit;
-    }
-
-    public String getFilterResult() {
-        return this.filterResult;
-    }
-
-    public void setFilterResult(String filterResult) {
-        this.filterResult = filterResult;
     }
 }
 

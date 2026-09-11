@@ -3,11 +3,14 @@ package com.demian.docsearch.constant;
 import java.util.Set;
 
 public final class AppConstants {
+    public static final String COL_INDEX = "#";
     public static final String COL_NAME = "Name";
     public static final String COL_YEAR = "Year";
     public static final String COL_DATE_MODIFIED = "Date Modified";
     public static final String COL_DIRECTORY_PATH = "Directory Path";
-    public static final String[] TABLE_COLUMN_NAMES = new String[]{"Name", "Year", "Date Modified", "Directory Path"};
+    public static final String[] TABLE_COLUMN_NAMES = new String[]{
+            COL_INDEX, COL_NAME, COL_YEAR, COL_DATE_MODIFIED, COL_DIRECTORY_PATH
+    };
     public static final String SORT_NAME = "name";
     public static final String SORT_YEAR = "year";
     public static final String SORT_PUBLISHED = "published";

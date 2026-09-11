@@ -24,5 +24,37 @@ public class QueryMatcher {
         }
         return false;
     }
+
+    public static boolean matchesAny(List<String> texts, List<SearchRule> rules, List<Pattern> globalExcludes) {
+        if (CollectionUtils.isEmpty(texts)) return false;
+        if (CollectionUtils.isNotEmpty(globalExcludes)) {
+            for (Pattern ex : globalExcludes) {
+                for (String t : texts) {
+                    if (t != null && ex.matcher(t).find()) return false;
+                }
+            }
+        }
+        if (CollectionUtils.isEmpty(rules)) return true;
+        for (SearchRule rule : rules) {
+            boolean excluded = false;
+            if (CollectionUtils.isNotEmpty(rule.getExcludeRegexes())) {
+                for (Pattern exc : rule.getExcludeRegexes()) {
+                    for (String t : texts) {
+                        if (t == null || !exc.matcher(t).find()) continue;
+                        excluded = true;
+                        break;
+                    }
+                    if (excluded) break;
+                }
+            }
+            if (excluded) continue;
+            Pattern inc = rule.getIncludeRegex();
+            if (inc == null) return true;
+            for (String t : texts) {
+                if (t != null && inc.matcher(t).find()) return true;
+            }
+        }
+        return false;
+    }
 }
 

@@ -18,9 +18,7 @@ public record FileItem(Path path, int year, String publisher, long modified, boo
     }
 
     private static long calculateSize(Path path, boolean isDirectory) {
-        if (isDirectory || path == null) {
-            return -1L;
-        }
+        if (isDirectory || path == null) return -1L;
         try {
             return Files.size(path);
         }
@@ -31,9 +29,7 @@ public record FileItem(Path path, int year, String publisher, long modified, boo
     }
 
     public String name() {
-        if (this.path == null) {
-            return "";
-        }
+        if (this.path == null) return "";
         return this.path.getFileName() != null ? this.path.getFileName().toString() : this.path.toString();
     }
 
@@ -42,19 +38,13 @@ public record FileItem(Path path, int year, String publisher, long modified, boo
     }
 
     public String parentStr() {
-        if (this.path == null) {
-            return "";
-        }
+        if (this.path == null) return "";
         return this.path.getParent() != null ? this.path.getParent().toString() : "";
     }
 
     public String publisherDisplay() {
-        if (this.isDirectory) {
-            return "Folder";
-        }
-        if (StringUtils.isBlank(this.publisher)) {
-            return "Unknown";
-        }
+        if (this.isDirectory) return "Folder";
+        if (StringUtils.isBlank(this.publisher)) return "NA";
         return StringUtils.capitalize(this.publisher.toLowerCase(Locale.ROOT));
     }
 
@@ -63,23 +53,15 @@ public record FileItem(Path path, int year, String publisher, long modified, boo
     }
 
     public String dateModifiedStr() {
-        if (this.modified <= 0L) {
-            return "-";
-        }
+        if (this.modified <= 0L) return "-";
         LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(this.modified), ZoneId.systemDefault());
         return DATE_FORMATTER.format(ldt);
     }
 
     public String sizeDisplay() {
-        if (this.isDirectory) {
-            return "Folder";
-        }
-        if (this.sizeBytes < 0L) {
-            return "-";
-        }
-        if (this.sizeBytes < 1024L) {
-            return this.sizeBytes + " B";
-        }
+        if (this.isDirectory) return "Folder";
+        if (this.sizeBytes < 0L) return "-";
+        if (this.sizeBytes < 1024L) return this.sizeBytes + " B";
         int exp = (int)(Math.log(this.sizeBytes) / Math.log(1024.0));
         String pre = "" + "KMGTPE".charAt(exp - 1);
         return String.format(Locale.US, "%.2f %sB", (double)this.sizeBytes / Math.pow(1024.0, exp), pre);
