@@ -91,6 +91,7 @@ extends JPanel {
             }
         });
         this.tree.addTreeSelectionListener(e -> {
+            if (this.suppressSelectEvent) return;
             TreePath path = this.tree.getSelectionPath();
             if (path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode treeNode
                     && treeNode.getUserObject() instanceof FolderNodeUserObject uo) {

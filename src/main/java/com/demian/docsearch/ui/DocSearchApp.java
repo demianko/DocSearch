@@ -290,17 +290,6 @@ extends JFrame {
             }
         });
         this.updateHeaderSortIndicators(this.currentSortColumn, this.sortAscending);
-        this.resultsTable.getSelectionModel().addListSelectionListener(e -> {
-            if (e.getValueIsAdjusting()) return;
-            int row = this.resultsTable.getSelectedRow();
-            if (row >= 0 && this.resultsTable.getSelectedRowCount() == 1) {
-                FileItem item = this.tableModel.getItem(row);
-                if (item != null && item.isDirectory()) {
-                    this.txtFolder.setText(item.path().toAbsolutePath().toString());
-                    this.explorerNav.selectPath(item.path(), true);
-                }
-            }
-        });
         this.resultsTable.addMouseListener(new MouseAdapter(){
 
             @Override
