@@ -2,6 +2,9 @@
 
 A desktop file search utility ported from the Python/PyQt version to **Java 21 LTS** and **Java Swing** with the modern **FlatLaf Dark Theme**.
 
+<img width="1313" height="835" alt="image" src="https://github.com/user-attachments/assets/aed376bd-ab2a-4615-a306-6df40c71aa83" />
+
+
 ## Features & Capabilities
 
 1. **Dual-Pane Navigation & Split Layout**:
