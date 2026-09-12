@@ -2,6 +2,8 @@
 
 A desktop file and document search utility built with **Java 21 LTS** and **Java Swing** with the modern **FlatLaf Dark Theme**.
 
+<img width="1478" height="745" alt="image" src="https://github.com/user-attachments/assets/e586c420-e287-42d6-9f36-73fdd373803c" />
+
 ## Features & Capabilities
 
 1. **Dual-Pane Navigation & Split Layout**:
@@ -91,7 +93,7 @@ A desktop file and document search utility built with **Java 21 LTS** and **Java
 
 ---
 
-## Prerequisites
+## Development Prerequisites
 
 - **Java JDK 21+** (e.g. `C:\ADev\lang\java\jdk21`)
 - **Apache Maven 3.9+** (e.g. `C:\ADev\tools\apache-maven-3.9.6`)
