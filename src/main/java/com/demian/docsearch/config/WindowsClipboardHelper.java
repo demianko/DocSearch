@@ -42,6 +42,21 @@ public class WindowsClipboardHelper {
         }
     }
 
+    public static List<File> getFilesFromClipboard() {
+        try {
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            if (clipboard.isDataFlavorAvailable(DataFlavor.javaFileListFlavor)) {
+                @SuppressWarnings("unchecked")
+                List<File> files = (List<File>) clipboard.getData(DataFlavor.javaFileListFlavor);
+                if (files != null) {
+                    return files;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return List.of();
+    }
+
     private static class FileListAndTextTransferable
     implements Transferable {
         private final List<File> files;

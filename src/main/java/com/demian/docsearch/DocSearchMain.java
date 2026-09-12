@@ -25,7 +25,7 @@ public class DocSearchMain {
             if (args.length > 0) {
                 Path targetDir = Paths.get(args[0]).toAbsolutePath().normalize();
                 if (Files.exists(targetDir) && Files.isDirectory(targetDir)) {
-                    app.onNavFolderSelected(targetDir);
+                    app.selectDirectory(targetDir);
                 }
             }
             app.setVisible(true);
