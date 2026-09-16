@@ -2,7 +2,13 @@
 
 A high-performance, modern desktop document and file search utility built with **Java 21 LTS**, **Java Swing**, and the **FlatLaf Dark Theme**.
 
-<img width="1478" height="745" alt="DocSearch Pro UI" src="https://github.com/user-attachments/assets/e586c420-e287-42d6-9f36-73fdd373803c" />
+<img width="1345" height="1038" alt="DocSearch file name based search" src="https://github.com/user-attachments/assets/0378919a-7afa-4b06-8e4b-c83f3361f30a" />
+
+
+<img width="1347" height="1132" alt="DocSearch Pro AI Search UI" src="https://github.com/user-attachments/assets/75d1ec95-c368-4c06-bdc0-d59d4c7bbcb7" />
+
+<img width="1155" height="252" alt="LLM configuration" src="https://github.com/user-attachments/assets/d880c696-e1f4-458a-95b8-910cdbe48245" />
+
 
 ---
 
