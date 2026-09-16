@@ -218,6 +218,18 @@ public class ResultsTablePanel extends JPanel {
         return row >= 0 ? this.tableModel.getItem(row) : null;
     }
 
+    public ResultsTableModel getTableModel() {
+        return this.tableModel;
+    }
+
+    public List<FileItem> getItems() {
+        return this.tableModel.getItems();
+    }
+
+    public int getItemCount() {
+        return this.tableModel.getRowCount();
+    }
+
     public void setItems(List<FileItem> items) {
         this.tableModel.setItems(items);
     }

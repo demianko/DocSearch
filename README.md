@@ -1,106 +1,127 @@
 # DocSearch Pro - Java 21 Swing Edition
 
-A desktop file and document search utility built with **Java 21 LTS** and **Java Swing** with the modern **FlatLaf Dark Theme**.
+A high-performance, modern desktop document and file search utility built with **Java 21 LTS**, **Java Swing**, and the **FlatLaf Dark Theme**.
 
-<img width="1478" height="745" alt="image" src="https://github.com/user-attachments/assets/e586c420-e287-42d6-9f36-73fdd373803c" />
+<img width="1345" height="1038" alt="DocSearch file name based search" src="https://github.com/user-attachments/assets/0378919a-7afa-4b06-8e4b-c83f3361f30a" />
 
-## Features & Capabilities
 
-1. **Dual-Pane Navigation & Split Layout**:
-   - **Left Explorer Pane (`DocExplorerNav`)**: Windows Explorer style tree navigation with lazy directory expansion, system drive discovery,
-     folder creation, file creation, folder renaming (<kbd>F2</kbd>), deletion (<kbd>Delete</kbd>), and context menu actions.
-   - **Right Results Pane (`ResultsTableModel` & `JTable`)**: Streamed search results displaying sequential integer **# (Index)**, **Name**,
-     **Year**, **Date Modified**, and **Directory Path**.
-   - **Folder Navigation**: Double-click (or press <kbd>Enter</kbd>) on any folder to navigate directly into it; single-click selects the item.
+<img width="1347" height="1132" alt="DocSearch Pro AI Search UI" src="https://github.com/user-attachments/assets/75d1ec95-c368-4c06-bdc0-d59d4c7bbcb7" />
 
-2. **Folder Context Menus ("New Folder" & "New File")**:
-   - Right-click any folder in the left Explorer tree or search results table to access:
-     - **📁 New Folder**: Opens a compact modal dialog to enter a folder name. Automatically suggests next available names (`"New Folder"`,
-       `"New Folder (2)"`), validates against invalid characters (`\ / : * ? " < > |`), checks collisions, and creates the folder.
-     - **📄 New File**: Opens a compact modal dialog to enter a file name. Automatically suggests next available names (`"New File.txt"`,
-       `"New File (2).txt"`), pre-selects the basename for quick typing, validates input, and creates the file.
-   - In-place tree updates preserve all expanded directory nodes without collapsing the tree.
+<img width="1155" height="252" alt="LLM configuration" src="https://github.com/user-attachments/assets/d880c696-e1f4-458a-95b8-910cdbe48245" />
 
-3. **Delete Action with Confirmation (<kbd>Delete</kbd> or Context Menu)**:
-   - Available via right-click context menu (**🗑️ Delete**) or the <kbd>Delete</kbd> key for single files, folders, or multi-item selections.
-   - Displays a confirmation dialog before permanent deletion:
-     - Prompts specifically for single files, warns about recursive deletion for folders, and displays count for multiple items.
-   - Deletes files and folders recursively using Apache Commons IO.
-   - Automatically removes deleted items from the results table and updates the Explorer tree.
-   - System drive roots (`C:\`, `D:\`) are protected against accidental deletion.
-   - If the folder currently being viewed is deleted, the view automatically navigates to its parent directory.
-
-4. **Drag-and-Drop Moving**:
-   - Drag a file or group of files directly from the results table and drop them onto:
-     - Any **folder row** in the search results table.
-     - Any **folder node** in the left Explorer tree navigation panel.
-   - Automatically moves the selected files into the target folder and refreshes the directory view.
-   - Prevents invalid moves such as moving a folder into a subdirectory of itself or moving into the same folder.
-
-5. **Interactive Column Header Click Sorting**:
-   - Click column headers to toggle sort direction with visual arrow indicators (`▲` / `▼`):
-     - **#** (Col 0): 1-based sequential index numbering.
-     - **Name** (Col 1): Alphabetical A–Z (▲) / Z–A (▼).
-     - **Year** (Col 2): Newest year first (▼) / Oldest year first (▲).
-     - **Date Modified** (Col 3): Newest timestamp first (▼) / Oldest first (▲).
-     - **Directory Path** (Col 4): Folder path A–Z (▲) / Z–A (▼).
-   - Folders remain anchored at the top regardless of sort direction.
-   - Preserves row selection and automatically scrolls selected items into view across sorts.
-
-6. **Advanced Query Syntax**:
-   - **Wildcards**: `*` (zero or more characters), `?` (single character).
-   - **Word-Boundary Matching**: Spaces match common file delimiters (`.`, `_`, `-`, `+`, spaces).
-   - **Logical OR Alternatives**: Pipe syntax (e.g. `tutorial | guide | intro`).
-   - **Multi-Query Patterns**: Comma-separated query terms (e.g. `python*, java*`).
-   - **Exclusion Filters**:
-     - Inline exclusions: `learning python NOT draft`
-     - Global exclusions: `-draft, NOT old, NOT temp`
-
-7. **Extension Filtering**:
-   - Comma-delimited extension filtering with inclusion and exclusion support:
-     - Inclusions: `pdf, epub, mobi`
-     - Exclusions: `-tmp, -log, NOT txt`
-
-8. **Smart Metadata Extraction**:
-   - Fast filename parsing extracting release and publication year (`1990`–`2029`).
-   - Publisher detection (`O'Reilly`, `Packt`, `Manning`, `Apress`, `Wiley`, `Addison-Wesley`, `No Starch`, `Microsoft`, etc.).
-
-9. **Instant Direct Folder Browsing**:
-   - Selecting any folder in the left navigation tree immediately loads its direct child files and subdirectories without recursive overhead.
-   - System directories (`$RECYCLE.BIN`, `System Volume Information`) are automatically filtered out.
-
-10. **Native Windows Shell Integration**:
-    - **Dual-Flavor Clipboard Copy (<kbd>Ctrl+C</kbd>)**: Sets `CF_HDROP` (`DataFlavor.javaFileListFlavor`) allowing users to copy results and
-      paste actual file objects directly into Windows Explorer or Desktop, as well as text paths.
-    - **In-Place Rename Dialog (<kbd>F2</kbd> or Context Menu)**: Centered modal dialog with base name pre-selected (excluding extension),
-      collision checks, invalid character validation (`\ / : * ? " < > |`), and non-collapsing tree updates.
-    - **Context Menu & Shortcuts**: "Open File" / "Open Folder" (<kbd>Enter</kbd> or Double-Click), "Open in File Explorer",
-      "Copy Full Path" (<kbd>Ctrl+C</kbd>), "Delete" (<kbd>Delete</kbd>), and "Select All" (<kbd>Ctrl+A</kbd>).
-
-11. **Live Search Streaming & Background Execution**:
-    - Asynchronous search execution powered by `SwingWorker` keeps the GUI completely responsive during long operations.
-    - Real-time progress bar with live file scan counts and progress metrics.
-    - Clean search cancellation via <kbd>Esc</kbd> or the Stop button.
-
-12. **Live In-Memory Filtering & History Persistence**:
-    - Instant live filter bar filters loaded results in real-time as you type without re-scanning disks.
-    - Live filter query is kept in-memory only and is excluded from configuration persistence.
-    - Automatic persistence of last directory, patterns, extensions, search limit, window dimensions, and splitter position
-      in `~/.docsearch/config.json`.
-
-13. **Multi-Instance Support**:
-    - Launch multiple independent search windows concurrently.
 
 ---
 
-## Development Prerequisites
+## 🚀 Key Features & Capabilities
+
+### 1. 🗂️ Tabbed Multi-Mode Architecture
+- **Tab 1 — 🔍 Standard Search**: Instant wildcard, multi-query, extension, and publisher search with zero-overhead live folder browsing.
+- **Tab 2 — 🤖 AI Search**: Natural language semantic intent search powered by OpenAI-compatible LLMs and local SQLite indexing.
+- **Tab 3 — ⚙️ AI Settings**: Centralized configuration for OpenAI-compliant endpoints, API keys, model discovery, temperature, parallel concurrency, and customizable system prompts.
+
+---
+
+### 2. ⚡ High-Performance AI Natural Language Search
+- **Natural Language Intent Queries**: Query documents using human-like semantic prompts (e.g., *"2023 invoices"*, *"tax returns"*, *"machine learning architecture designs"*).
+- **Hybrid Candidate Pre-Scoring**: High-speed keyword tokenization and metadata ranking filters large directories down to high-relevance candidate pools before invoking the LLM.
+- **Configurable Parallel LLM Requests (Default: 4)**: Dispatches chunked evaluations concurrently over a bounded `Semaphore` worker pool (configurable from 1 to 32 parallel requests in AI Settings).
+- **Dynamic Small-Chunk Processing (15–30 files/chunk)**: Ultra-compact JSON payloads (~600–800 tokens) allow LLMs to return chunk evaluations in under **500–800ms**.
+- **Real-Time Progressive Result Streaming**: Discovered matches appear in the results table live as each LLM chunk finishes—no waiting for the entire batch to complete.
+- **Outdated Index Detection & 3-Second Auto-Dismiss Confirmation Dialog**:
+  - Automatically compares disk `last_modified` timestamps against SQLite `indexed_at` timestamps.
+  - If modified or new files are detected, a modal prompt offers **⚡ Reindex & Search**, **Search As-Is**, or **Cancel**.
+  - Includes a live 1-second countdown timer that automatically dismisses after **3 seconds** and defaults to continuing search unattended.
+- **Tab-Isolated Result Sets**: AI search results remain isolated from standard search; typing in **🎯 Filter Results** filters strictly within AI search results in-memory.
+
+---
+
+### 3. 🗄️ High-Speed Local SQLite Index Database
+- Embedded `sqlite-jdbc` index database stored at `~/.filesearch/docsearch_index.db` with indexed lookups on `root_folder`, `parent_folder`, `extension`, and `file_name`.
+- **Atomic Recreation on Reindexing**: Reindexing a directory performs a boundary-safe deletion of previous records matching the directory tree before batch-inserting fresh records from disk.
+- Automatically handles cross-platform forward-slash (`/`) and backslash (`\`) path normalization.
+
+---
+
+### 4. 🌐 AI Settings & OpenAI-Compliant Endpoint Support
+- **Universal Provider Compatibility**: Works seamlessly with OpenAI, Ollama (`http://localhost:11434/v1`), LM Studio, vLLM, LocalAI, Azure OpenAI, OpenRouter, and custom endpoints.
+- **Dynamic Model Discovery ("🔄 Fetch Models")**: Queries endpoint `/v1/models` and automatically populates available models into an editable dropdown.
+- **Connection Diagnostics ("🔌 Test Connection")**: Sends a lightweight validation request and displays live visual feedback.
+- **Concurrency & Tuning Controls**: Configure **⚡ Parallel Requests** (1–32), **🌡️ Temperature** (0.0–2.0), and **Timeout** (seconds).
+- **Customizable System Prompt Dialog**: Dedicated modal dialog with one-click **↺ Reset** to restore default system prompt.
+
+---
+
+### 5. 📝 Enterprise Logging with SLF4J & Logback
+- Full integration with **SLF4J 2.0.16** and **Logback 1.5.12**.
+- **Rolling File Logging**: Automatically writes rotating daily log files to `~/.filesearch/logs/docsearch.log` (10MB max per file, 7-day retention, 50MB total cap).
+- **Console Output**: Formatted with timestamps, thread names, log levels, and logger categories.
+
+---
+
+### 6. 📁 Explorer Navigation & File Management
+- **Left Explorer Pane (`DocExplorerNav`)**: Windows Explorer tree navigation with lazy directory expansion, system drive discovery, folder renaming (<kbd>F2</kbd>), deletion (<kbd>Delete</kbd>), and context menus.
+- **Folder Context Menus ("New Folder" & "New File")**: Modal dialogs with automatic naming suggestion (`"New Folder (2)"`), collision checks, and character validation (`\ / : * ? " < > |`).
+- **Safe Recursive Deletion**: Prompts confirmation before permanent deletion with recursive deletion protection for system drive roots (`C:\`, `D:\`).
+- **Drag-and-Drop Moving**: Drag files from the results table directly onto folder rows or Explorer tree nodes to move files safely with circular dependency prevention.
+- **Interactive Column Header Click Sorting**: Click column headers with visual arrow indicators (`▲` / `▼`) for Index `#`, Name, Year, Date Modified, and Directory Path.
+- **Dual-Flavor Clipboard Copy (<kbd>Ctrl+C</kbd>)**: Copies native `CF_HDROP` file objects directly pasteable into Windows Explorer and Desktop.
+- **Live In-Memory Filtering**: Instant live filter bar filters loaded results in real-time as you type without disk rescans.
+- **Configuration Persistence**: Automatic saving of last directory, patterns, extensions, search limit, AI settings, window geometry, and split positions in `~/.filesearch/config.json`.
+
+---
+
+## 🛠️ Technology Stack
+
+| Component | Technology / Library | Version |
+|---|---|---|
+| **Runtime** | Java LTS | 21+ |
+| **GUI Framework** | Java Swing / AWT | Core |
+| **Look and Feel** | FlatLaf (Dark) | 3.5.4 |
+| **Local Database** | SQLite JDBC | 3.47.2.0 |
+| **JSON Serialization** | Jackson Databind | 2.18.2 |
+| **HTTP Client** | Java 11+ HttpClient (`java.net.http`) | Native |
+| **Logging Facade** | SLF4J API | 2.0.16 |
+| **Logging Implementation** | Logback Classic & Core | 1.5.12 |
+| **Testing** | JUnit 5 & AssertJ | 5.11.4 / 3.27.3 |
+
+---
+
+## 📂 File Locations & Structure
+
+All user data, index caches, and logs are organized in the user's home directory under `~/.filesearch/`:
+
+```
+~/.filesearch/
+├── config.json              # UI state, search history, AI endpoint & parallel configuration
+├── docsearch_index.db       # Embedded SQLite index database for lightning-fast lookups
+└── logs/
+    ├── docsearch.log        # Active application log
+    └── docsearch.YYYY-MM-DD.N.log  # Archived rolling logs (max 10MB each, 7-day retention)
+```
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Context | Action |
+|---|---|---|
+| <kbd>Enter</kbd> | Search / Filter Inputs | Execute search or trigger immediate filter |
+| <kbd>Ctrl</kbd> + <kbd>C</kbd> | Results Table | Copy selected rows as text and native files to OS clipboard |
+| <kbd>F2</kbd> | Explorer Tree | Rename selected folder or file |
+| <kbd>Delete</kbd> | Explorer Tree / Results | Prompt confirmation and safely delete selected file/folder |
+| <kbd>Ctrl</kbd> + <kbd>L</kbd> | Path Bar | Focus and highlight directory path input |
+| <kbd>Esc</kbd> | Modals / Dialogs | Dismiss active dialog or cancel operation |
+
+---
+
+## ⚙️ Development Prerequisites
 
 - **Java JDK 21+** (e.g. `C:\ADev\lang\java\jdk21`)
 - **Apache Maven 3.9+** (e.g. `C:\ADev\tools\apache-maven-3.9.6`)
 
 ---
 
-## Build & Run
+## 📦 Build & Run
 
 ### Build with Maven
 ```cmd
@@ -108,7 +129,7 @@ build.bat
 ```
 `build.bat` verifies that `%JAVA_HOME%` is configured and points to a valid JDK before compiling and packaging the shaded fat JAR.
 
-Or manually:
+Or manually via Maven:
 ```cmd
 mvn clean package
 ```
@@ -117,17 +138,17 @@ mvn clean package
 ```cmd
 run.bat
 ```
-Or directly using the shaded JAR:
+Or run the shaded fat JAR directly:
 ```cmd
 java -jar target\doc-search-pro-1.0.0.jar
 ```
-Or passing an initial directory:
+Or specify an initial target directory:
 ```cmd
 java -jar target\doc-search-pro-1.0.0.jar "C:\MyFolder"
 ```
 
-### Run Tests
+### Run Test Suite
 ```cmd
 mvn test
 ```
-All unit tests cover query parsing, wildcards, exclusions, metadata extraction, NIO.2 search, delete/move operations, and config persistence.
+All **79 automated tests** validate query parsing, wildcards, metadata extraction, NIO.2 search, SQLite index recreation, AI parallel chunking, progressive streaming, auto-dismiss confirmation dialogs, and config persistence.

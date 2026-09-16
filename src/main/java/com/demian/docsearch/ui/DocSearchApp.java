@@ -1,12 +1,16 @@
 package com.demian.docsearch.ui;
 
+import com.demian.docsearch.ai.AiSearchService;
+import com.demian.docsearch.ai.OpenAiClient;
 import com.demian.docsearch.config.ConfigManager;
 import com.demian.docsearch.constant.ResultColumn;
+import com.demian.docsearch.db.FileIndexDatabase;
 import com.demian.docsearch.engine.FileSearchEngine;
 import com.demian.docsearch.model.AppConfig;
 import com.demian.docsearch.model.FileItem;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Frame;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
@@ -24,8 +28,10 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
@@ -35,13 +41,24 @@ public class DocSearchApp extends JFrame {
     private final FileOperationsService fileOperationsService;
     private final SearchController searchController;
     private final List<FileItem> allResults = new ArrayList<>();
+    private final List<FileItem> aiResults = new ArrayList<>();
+
+    private final FileIndexDatabase fileIndexDatabase;
+    private final OpenAiClient openAiClient;
+    private final AiSearchService aiSearchService;
 
     private final ClipboardBuffer clipboardBuffer = new ClipboardBuffer();
     private DocExplorerNav explorerNav;
+    private JTabbedPane tabbedPane;
     private SearchControlsPanel controlsPanel;
+    private AiSearchControlsPanel aiControlsPanel;
+    private AiConfigPanel aiConfigPanel;
     private SearchFilterBar filterBar;
     private ResultsTablePanel tablePanel;
     private StatusBarPanel statusBarPanel;
+
+    private SwingWorker<?, ?> currentAiWorker;
+    private volatile boolean aiOperationCancelled;
 
     private int currentSortColumn = ResultColumn.DATE_MODIFIED.modelIndex();
     private boolean sortAscending = false;
@@ -51,10 +68,18 @@ public class DocSearchApp extends JFrame {
     }
 
     public DocSearchApp(ConfigManager configManager) {
+        this(configManager, null);
+    }
+
+    public DocSearchApp(ConfigManager configManager, FileIndexDatabase customDb) {
         this.configManager = configManager != null ? configManager : new ConfigManager();
         this.config = this.configManager.load();
         this.fileOperationsService = new FileOperationsService();
         this.searchController = new SearchController();
+
+        this.fileIndexDatabase = customDb != null ? customDb : new FileIndexDatabase(this.configManager.getConfigDir().resolve("docsearch_index.db"));
+        this.openAiClient = new OpenAiClient();
+        this.aiSearchService = new AiSearchService(this.openAiClient, new com.fasterxml.jackson.databind.ObjectMapper());
 
         this.setTitle("DocSearch Pro \u2014 Fast Search & Sort");
         this.setSize(1350, 850);
@@ -65,6 +90,7 @@ public class DocSearchApp extends JFrame {
             @Override
             public void windowClosing(WindowEvent e) {
                 DocSearchApp.this.saveCurrentConfig();
+                DocSearchApp.this.stopAiSearch();
                 DocSearchApp.this.dispose();
                 System.exit(0);
             }
@@ -90,10 +116,30 @@ public class DocSearchApp extends JFrame {
                 this.clipboardBuffer::hasContent
         );
 
+        this.tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+        this.tabbedPane.setFont(this.tabbedPane.getFont().deriveFont(Font.BOLD, 12.0f));
+
+        // Tab 1: Standard Search
         this.controlsPanel = new SearchControlsPanel(this.config);
         this.controlsPanel.setOnSearchAction(this::searchFiles);
         this.controlsPanel.setOnStopAction(this::stopSearch);
         this.controlsPanel.setOnBrowseAction(this::browseDirectory);
+        this.tabbedPane.addTab("\ud83d\udd0d Standard Search", this.controlsPanel);
+
+        // Tab 2: AI Search
+        this.aiControlsPanel = new AiSearchControlsPanel(this.config.getDirectory());
+        this.aiControlsPanel.setOnSearchAction(this::searchFilesAi);
+        this.aiControlsPanel.setOnStopAction(this::stopAiSearch);
+        this.aiControlsPanel.setOnIndexAction(this::indexCurrentDirectory);
+        this.tabbedPane.addTab("\u2728 AI Search", this.aiControlsPanel);
+
+        // Tab 3: AI Settings
+        this.aiConfigPanel = new AiConfigPanel(this.config, this.configManager, this.openAiClient);
+        this.aiConfigPanel.setOnConfigSaved(updatedConfig -> this.updateAiTabState());
+        this.tabbedPane.addTab("\u2699\ufe0f AI Settings", this.aiConfigPanel);
+
+        this.updateAiTabState();
+        this.tabbedPane.addChangeListener(e -> this.onTabChanged());
 
         this.filterBar = new SearchFilterBar();
         this.filterBar.setOnFilterChanged(this::applyLiveFilter);
@@ -121,7 +167,7 @@ public class DocSearchApp extends JFrame {
         this.statusBarPanel = new StatusBarPanel();
 
         JPanel rightWorkspace = new JPanel(new BorderLayout(0, 10));
-        rightWorkspace.add(this.controlsPanel, BorderLayout.NORTH);
+        rightWorkspace.add(this.tabbedPane, BorderLayout.NORTH);
 
         JPanel centerPanel = new JPanel(new BorderLayout(0, 8));
         centerPanel.add(this.filterBar, BorderLayout.NORTH);
@@ -141,7 +187,10 @@ public class DocSearchApp extends JFrame {
         this.getRootPane().registerKeyboardAction(e -> this.renameSelectedItem(), KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0), 2);
         this.getRootPane().registerKeyboardAction(
                 e -> this.deleteSelectedItems(), KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), 2);
-        this.getRootPane().registerKeyboardAction(e -> this.stopSearch(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), 2);
+        this.getRootPane().registerKeyboardAction(e -> {
+            this.stopSearch();
+            this.stopAiSearch();
+        }, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), 2);
         this.getRootPane().registerKeyboardAction(
                 e -> this.copySelectedItems(), KeyStroke.getKeyStroke(KeyEvent.VK_C, shortcutKey), 2);
         this.getRootPane().registerKeyboardAction(
@@ -150,6 +199,22 @@ public class DocSearchApp extends JFrame {
                 e -> this.pasteIntoSelectedOrCurrent(), KeyStroke.getKeyStroke(KeyEvent.VK_V, shortcutKey), 2);
 
         this.restoreInitialDirectory();
+    }
+
+    public void updateAiTabState() {
+        boolean configured = this.config.isAiConfigured();
+        this.aiControlsPanel.setAiConfigured(configured);
+        this.updateFolderIndexState();
+    }
+
+    public void updateFolderIndexState() {
+        String dir = this.aiControlsPanel.getDirectory();
+        if (StringUtils.isNotBlank(dir)) {
+            int count = this.fileIndexDatabase.getIndexedFileCount(dir);
+            this.aiControlsPanel.setIndexed(count > 0);
+        } else {
+            this.aiControlsPanel.setIndexed(false);
+        }
     }
 
     private void restoreInitialDirectory() {
@@ -174,25 +239,14 @@ public class DocSearchApp extends JFrame {
         SwingUtilities.invokeLater(() -> this.explorerNav.selectPath(dir, true));
     }
 
-    private void browseDirectory() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        String current = this.controlsPanel.getDirectory();
-        if (!current.isEmpty() && Files.exists(Paths.get(current), new LinkOption[0])) {
-            chooser.setCurrentDirectory(new File(current));
-        }
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            String path = chooser.getSelectedFile().getAbsolutePath();
-            Path selectedPath = Paths.get(path);
-            this.selectDirectory(selectedPath);
-        }
-    }
-
     public void onNavFolderSelected(Path folder) {
         if (folder == null || !Files.exists(folder, new LinkOption[0])) {
             return;
         }
-        this.controlsPanel.setDirectory(folder.toAbsolutePath().toString());
+        String folderPathStr = folder.toAbsolutePath().toString();
+        this.controlsPanel.setDirectory(folderPathStr);
+        this.aiControlsPanel.setDirectory(folderPathStr);
+        this.updateFolderIndexState();
         this.saveCurrentConfig();
         this.filterBar.resetProgress();
         List<FileItem> items = FileSearchEngine.listDirectSubFolderFiles(folder);
@@ -200,14 +254,21 @@ public class DocSearchApp extends JFrame {
         List<FileItem> sorted = FileSearchEngine.sortResults(items, criteria, !this.sortAscending);
         this.allResults.clear();
         this.allResults.addAll(sorted);
+        this.aiResults.clear();
         this.applyLiveFilter();
-        this.statusBarPanel.setStatus("Viewing folder: " + folder.getFileName());
+        if (this.tabbedPane != null && this.tabbedPane.getSelectedIndex() == 1) {
+            this.statusBarPanel.setStatus("Selected folder for AI Search: " + folder.getFileName());
+        } else {
+            this.statusBarPanel.setStatus("Viewing folder: " + folder.getFileName());
+        }
     }
 
     private void onNavFolderRename(Path folderPath) {
         new RenameDialog((Frame) this, folderPath, true, newPath -> {
             if (this.controlsPanel.getDirectory().equalsIgnoreCase(folderPath.toString())) {
-                this.controlsPanel.setDirectory(newPath.toAbsolutePath().toString());
+                String newPathStr = newPath.toAbsolutePath().toString();
+                this.controlsPanel.setDirectory(newPathStr);
+                this.aiControlsPanel.setDirectory(newPathStr);
                 this.onNavFolderSelected(newPath);
             }
             this.explorerNav.onFolderRenamed(folderPath, newPath);
@@ -238,7 +299,10 @@ public class DocSearchApp extends JFrame {
 
     private Path getCurrentFolder() {
         String current = this.controlsPanel.getDirectory();
-        if (!current.isEmpty()) {
+        if (StringUtils.isBlank(current)) {
+            current = this.aiControlsPanel.getDirectory();
+        }
+        if (StringUtils.isNotBlank(current)) {
             try {
                 Path p = Paths.get(current);
                 if (Files.exists(p)) {
@@ -250,6 +314,20 @@ public class DocSearchApp extends JFrame {
         return null;
     }
 
+    private void browseDirectory() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        String current = this.controlsPanel.getDirectory();
+        if (!current.isEmpty() && Files.exists(Paths.get(current), new LinkOption[0])) {
+            chooser.setCurrentDirectory(new File(current));
+        }
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            String path = chooser.getSelectedFile().getAbsolutePath();
+            Path selectedPath = Paths.get(path);
+            this.selectDirectory(selectedPath);
+        }
+    }
+
     private void searchFiles() {
         String dirStr = this.controlsPanel.getDirectory();
         if (StringUtils.isEmpty(dirStr) || !Files.exists(Paths.get(dirStr), new LinkOption[0])) {
@@ -258,6 +336,7 @@ public class DocSearchApp extends JFrame {
         }
         this.saveCurrentConfig();
         this.stopSearch();
+        this.stopAiSearch();
 
         final Path rootFolder = Paths.get(dirStr);
         final String patternQuery = this.controlsPanel.getPattern();
@@ -343,16 +422,280 @@ public class DocSearchApp extends JFrame {
         this.filterBar.setIndeterminate(false);
     }
 
-    private void applyLiveFilter() {
-        String filterText = this.filterBar.getFilterText();
-        if (StringUtils.isEmpty(filterText)) {
-            this.tablePanel.setItems(this.allResults);
-            this.statusBarPanel.setCount(this.allResults.size() + " items");
+    public void searchFilesAi() {
+        if (!this.config.isAiConfigured()) {
+            JOptionPane.showMessageDialog(this,
+                    "AI Search requires OpenAI configuration.\nPlease configure your API URL and Key in the 'AI Settings' tab.",
+                    "AI Configuration Required", JOptionPane.WARNING_MESSAGE);
+            this.tabbedPane.setSelectedIndex(2);
             return;
         }
-        List<FileItem> filtered = this.searchController.filterItems(this.allResults, filterText);
+
+        String dirStr = this.aiControlsPanel.getDirectory();
+        if (StringUtils.isEmpty(dirStr) || !Files.exists(Paths.get(dirStr), new LinkOption[0])) {
+            JOptionPane.showMessageDialog(this, "Please enter or select a valid target directory.", "Directory Not Found", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String prompt = this.aiControlsPanel.getPattern();
+        if (StringUtils.isBlank(prompt)) {
+            JOptionPane.showMessageDialog(this, "Please enter a natural language prompt in the AI Prompt field.", "Empty Search Prompt", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        this.saveCurrentConfig();
+        this.stopSearch();
+        this.stopAiSearch();
+
+        final Path rootFolder = Paths.get(dirStr);
+        final String extensionFilter = this.aiControlsPanel.getExtension();
+
+        int existingCount = this.fileIndexDatabase.getIndexedFileCount(dirStr);
+        boolean reindexRequested = false;
+
+        if (existingCount == 0) {
+            String folderDisplayName = rootFolder.getFileName() != null ? rootFolder.getFileName().toString() : rootFolder.toString();
+            AutoIndexNotificationDialog.showDialog(this, folderDisplayName, 3000);
+            reindexRequested = true;
+        } else if (this.fileIndexDatabase.hasFilesModifiedAfterIndex(rootFolder)) {
+            String folderDisplayName = rootFolder.getFileName() != null ? rootFolder.getFileName().toString() : rootFolder.toString();
+            ReindexConfirmationDialog.UserChoice choice = ReindexConfirmationDialog.showDialog(this, folderDisplayName, 3);
+            if (choice == ReindexConfirmationDialog.UserChoice.CANCEL) {
+                return;
+            } else if (choice == ReindexConfirmationDialog.UserChoice.REINDEX) {
+                reindexRequested = true;
+            }
+        }
+
+        final boolean shouldReindex = reindexRequested;
+
+        this.aiControlsPanel.setSearchEnabled(false);
+        this.aiControlsPanel.setStopEnabled(true);
+        this.aiControlsPanel.setIndexEnabled(false);
+        this.filterBar.setIndeterminate(true);
+        this.statusBarPanel.setStatus("AI Search: analyzing files with model " + this.config.getAiModel() + "...");
+        this.statusBarPanel.setCount("Searching...");
+        this.aiResults.clear();
+        this.tablePanel.setItems(List.of());
+
+        this.aiOperationCancelled = false;
+        final long startTime = System.currentTimeMillis();
+
+        this.currentAiWorker = new SwingWorker<List<FileItem>, FileItem>() {
+            @Override
+            protected List<FileItem> doInBackground() throws Exception {
+                int count = fileIndexDatabase.getIndexedFileCount(dirStr);
+                if (count == 0 || shouldReindex) {
+                    SwingUtilities.invokeLater(() -> statusBarPanel.setStatus("Indexing folder '" + rootFolder.getFileName() + "' into SQLite..."));
+                    fileIndexDatabase.indexDirectory(rootFolder, (curr, tot, item) -> {
+                        if (tot > 0) {
+                            filterBar.setProgress(curr, tot);
+                        }
+                    }, () -> aiOperationCancelled);
+                    SwingUtilities.invokeLater(() -> updateFolderIndexState());
+                }
+
+                if (aiOperationCancelled) return List.of();
+
+                return aiSearchService.search(
+                        fileIndexDatabase,
+                        dirStr,
+                        prompt,
+                        extensionFilter,
+                        config,
+                        (curr, tot, item) -> {
+                            if (tot > 0) {
+                                filterBar.setProgress(curr, tot);
+                                statusBarPanel.setStatus(String.format("AI Search: analyzed %,d of %,d candidates with %s...", curr, tot, config.getAiModel()));
+                            }
+                            if (item != null) {
+                                publish(item);
+                            }
+                        },
+                        () -> aiOperationCancelled
+                );
+            }
+
+            @Override
+            protected void process(List<FileItem> chunks) {
+                if (aiOperationCancelled || chunks == null || chunks.isEmpty()) return;
+                boolean added = false;
+                for (FileItem item : chunks) {
+                    if (item != null && !aiResults.contains(item)) {
+                        aiResults.add(item);
+                        added = true;
+                    }
+                }
+                if (added) {
+                    statusBarPanel.setCount(aiResults.size() + " files found");
+                    applyLiveFilter();
+                }
+            }
+
+            @Override
+            protected void done() {
+                long elapsedMillis = System.currentTimeMillis() - startTime;
+                double elapsedSec = (double) elapsedMillis / 1000.0;
+
+                aiControlsPanel.setSearchEnabled(true);
+                aiControlsPanel.setStopEnabled(false);
+                aiControlsPanel.setIndexEnabled(true);
+                filterBar.setIndeterminate(false);
+
+                if (aiOperationCancelled) {
+                    statusBarPanel.setStatus(String.format("AI Search stopped in %.2fs. Found %,d matching files.", elapsedSec, aiResults.size()));
+                    return;
+                }
+
+                try {
+                    List<FileItem> results = get();
+                    aiResults.clear();
+                    if (results != null) {
+                        aiResults.addAll(results);
+                    }
+
+                    if (!aiResults.isEmpty()
+                            && (currentSortColumn != ResultColumn.DATE_MODIFIED.modelIndex() || sortAscending)) {
+                        String criteria = getSortCriteria(currentSortColumn);
+                        List<FileItem> sorted = FileSearchEngine.sortResults(aiResults, criteria, !sortAscending);
+                        aiResults.clear();
+                        aiResults.addAll(sorted);
+                    }
+
+                    filterBar.setProgressValue(filterBar.getProgressMaximum());
+                    statusBarPanel.setStatus(String.format("AI Search completed in %.2fs (Found %,d matching files)", elapsedSec, aiResults.size()));
+                    statusBarPanel.setCount(aiResults.size() + " files found");
+                    applyLiveFilter();
+                } catch (Exception ex) {
+                    statusBarPanel.setStatus("AI Search error: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(DocSearchApp.this,
+                            "AI Search failed: " + ex.getMessage(),
+                            "AI Search Error", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+        this.currentAiWorker.execute();
+    }
+
+    public void indexCurrentDirectory() {
+        String dirStr = this.aiControlsPanel.getDirectory();
+        if (StringUtils.isEmpty(dirStr) || !Files.exists(Paths.get(dirStr), new LinkOption[0])) {
+            JOptionPane.showMessageDialog(this, "Please select a valid directory to index.", "Directory Not Found", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        this.stopSearch();
+        this.stopAiSearch();
+
+        final Path rootFolder = Paths.get(dirStr);
+        this.aiControlsPanel.setIndexEnabled(false);
+        this.aiControlsPanel.setSearchEnabled(false);
+        this.aiControlsPanel.setStopEnabled(true);
+        this.filterBar.setIndeterminate(true);
+        this.statusBarPanel.setStatus("Scanning and indexing files in '" + rootFolder.getFileName() + "' into SQLite...");
+        this.statusBarPanel.setCount("Indexing...");
+
+        this.aiOperationCancelled = false;
+        final long startTime = System.currentTimeMillis();
+
+        this.currentAiWorker = new SwingWorker<Integer, FileItem>() {
+            @Override
+            protected Integer doInBackground() {
+                return fileIndexDatabase.indexDirectory(rootFolder, (current, total, item) -> {
+                    if (total > 0) {
+                        filterBar.setProgress(current, total);
+                        statusBarPanel.setStatus(String.format("Indexing: %,d / %,d files...", current, total));
+                    } else if (current % 100 == 0) {
+                        statusBarPanel.setStatus(String.format("Scanning files: %,d files collected...", current));
+                    }
+                    if (item != null) {
+                        publish(item);
+                    }
+                }, () -> aiOperationCancelled);
+            }
+
+            @Override
+            protected void done() {
+                long elapsedMillis = System.currentTimeMillis() - startTime;
+                double elapsedSec = (double) elapsedMillis / 1000.0;
+
+                aiControlsPanel.setIndexEnabled(true);
+                aiControlsPanel.setSearchEnabled(true);
+                aiControlsPanel.setStopEnabled(false);
+                filterBar.setIndeterminate(false);
+
+                if (aiOperationCancelled) {
+                    statusBarPanel.setStatus(String.format("Indexing cancelled in %.2fs.", elapsedSec));
+                    return;
+                }
+
+                try {
+                    int totalIndexed = get();
+                    filterBar.setProgressValue(filterBar.getProgressMaximum());
+                    statusBarPanel.setStatus(String.format("Indexing complete: %,d files indexed into SQLite in %.2fs", totalIndexed, elapsedSec));
+                    statusBarPanel.setCount(totalIndexed + " files in SQLite index");
+                    updateFolderIndexState();
+                } catch (Exception ex) {
+                    statusBarPanel.setStatus("Indexing error: " + ex.getMessage());
+                }
+            }
+        };
+        this.currentAiWorker.execute();
+    }
+
+    public void stopAiSearch() {
+        this.aiOperationCancelled = true;
+        if (this.currentAiWorker != null && !this.currentAiWorker.isDone()) {
+            this.currentAiWorker.cancel(true);
+        }
+        if (this.aiControlsPanel != null) {
+            this.aiControlsPanel.setSearchEnabled(true);
+            this.aiControlsPanel.setStopEnabled(false);
+            this.aiControlsPanel.setIndexEnabled(true);
+        }
+        if (this.filterBar != null) {
+            this.filterBar.setIndeterminate(false);
+        }
+    }
+
+    public List<FileItem> getActiveResults() {
+        int selectedTab = this.tabbedPane != null ? this.tabbedPane.getSelectedIndex() : 0;
+        return (selectedTab == 1) ? this.aiResults : this.allResults;
+    }
+
+    private void onTabChanged() {
+        this.applyLiveFilter();
+        int selectedTab = this.tabbedPane != null ? this.tabbedPane.getSelectedIndex() : 0;
+        if (selectedTab == 1) {
+            if (this.aiResults.isEmpty()) {
+                this.statusBarPanel.setStatus("AI Search: Enter prompt and click AI Search to find files");
+                this.statusBarPanel.setCount("0 files found");
+            } else {
+                this.statusBarPanel.setStatus(String.format("AI Search: %,d matching files", this.aiResults.size()));
+                this.statusBarPanel.setCount(this.aiResults.size() + " files found");
+            }
+        } else if (selectedTab == 0) {
+            this.statusBarPanel.setStatus("Standard Search: Ready");
+            this.statusBarPanel.setCount(this.allResults.size() + " items");
+        }
+    }
+
+    public void applyLiveFilter() {
+        int selectedTab = this.tabbedPane != null ? this.tabbedPane.getSelectedIndex() : 0;
+        List<FileItem> sourceList = (selectedTab == 1) ? this.aiResults : this.allResults;
+        String filterText = this.filterBar != null ? this.filterBar.getFilterText() : "";
+        if (StringUtils.isEmpty(filterText)) {
+            this.tablePanel.setItems(sourceList);
+            if (selectedTab == 1) {
+                this.statusBarPanel.setCount(sourceList.isEmpty() ? "0 files found" : sourceList.size() + " files found");
+            } else {
+                this.statusBarPanel.setCount(sourceList.size() + " items");
+            }
+            return;
+        }
+        List<FileItem> filtered = this.searchController.filterItems(sourceList, filterText);
         this.tablePanel.setItems(filtered);
-        this.statusBarPanel.setCount(filtered.size() + " / " + this.allResults.size() + " items");
+        this.statusBarPanel.setCount(filtered.size() + " / " + sourceList.size() + " items");
     }
 
     private void openSelectedItem() {
@@ -534,6 +877,7 @@ public class DocSearchApp extends JFrame {
                             this.allResults.clear();
                             this.applyLiveFilter();
                             this.controlsPanel.setDirectory("");
+                            this.aiControlsPanel.setDirectory("");
                         }
                     } else if (curFolder != null && Files.exists(curFolder, new LinkOption[0])) {
                         this.onNavFolderSelected(curFolder);
@@ -573,7 +917,8 @@ public class DocSearchApp extends JFrame {
     }
 
     private void sortByColumn(int col) {
-        if (this.allResults.isEmpty() || col == ResultColumn.INDEX.modelIndex()) {
+        List<FileItem> activeList = this.getActiveResults();
+        if (activeList.isEmpty() || col == ResultColumn.INDEX.modelIndex()) {
             return;
         }
         FileItem selectedItem = this.tablePanel.getSelectedItem();
@@ -585,9 +930,9 @@ public class DocSearchApp extends JFrame {
             this.sortAscending = resultCol.defaultAscending();
         }
         String criteria = resultCol.sortCriteria();
-        List<FileItem> sorted = FileSearchEngine.sortResults(this.allResults, criteria, !this.sortAscending);
-        this.allResults.clear();
-        this.allResults.addAll(sorted);
+        List<FileItem> sorted = FileSearchEngine.sortResults(activeList, criteria, !this.sortAscending);
+        activeList.clear();
+        activeList.addAll(sorted);
         this.applyLiveFilter();
         this.tablePanel.updateHeaderSortIndicators(this.currentSortColumn, this.sortAscending);
         if (selectedItem != null) {
@@ -607,16 +952,44 @@ public class DocSearchApp extends JFrame {
         return this.explorerNav;
     }
 
+    public JTabbedPane getTabbedPane() {
+        return this.tabbedPane;
+    }
+
     public SearchControlsPanel getControlsPanel() {
         return this.controlsPanel;
+    }
+
+    public AiSearchControlsPanel getAiControlsPanel() {
+        return this.aiControlsPanel;
+    }
+
+    public AiConfigPanel getAiConfigPanel() {
+        return this.aiConfigPanel;
+    }
+
+    public FileIndexDatabase getFileIndexDatabase() {
+        return this.fileIndexDatabase;
     }
 
     public ResultsTablePanel getTablePanel() {
         return this.tablePanel;
     }
 
+    public SearchFilterBar getFilterBar() {
+        return this.filterBar;
+    }
+
+    public StatusBarPanel getStatusBarPanel() {
+        return this.statusBarPanel;
+    }
+
     public List<FileItem> getAllResults() {
         return this.allResults;
+    }
+
+    public List<FileItem> getAiResults() {
+        return this.aiResults;
     }
 
     public record ProgressChunk(int scanned, int total, FileItem item) {

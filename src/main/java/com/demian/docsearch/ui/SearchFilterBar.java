@@ -10,6 +10,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.apache.commons.lang3.StringUtils;
@@ -41,7 +42,7 @@ public class SearchFilterBar extends JPanel {
         gbc.gridwidth = 1;
         gbc.weightx = 0.0;
         gbc.insets = new Insets(0, 2, 0, 8);
-        JLabel lblFilter = new JLabel("\ud83c\udfaf Filter Results:");
+        JLabel lblFilter = new JLabel("🎯 Filter Results:");
         lblFilter.setFont(lblFilter.getFont().deriveFont(1, 12.0f));
         this.add(lblFilter, gbc);
 
@@ -86,18 +87,34 @@ public class SearchFilterBar extends JPanel {
     }
 
     public void setIndeterminate(boolean indeterminate) {
-        this.progressBar.setIndeterminate(indeterminate);
+        if (SwingUtilities.isEventDispatchThread()) {
+            this.progressBar.setIndeterminate(indeterminate);
+        } else {
+            SwingUtilities.invokeLater(() -> this.progressBar.setIndeterminate(indeterminate));
+        }
     }
 
     public void resetProgress() {
-        this.progressBar.setIndeterminate(false);
         this.progressBar.setValue(0);
+        if (this.progressBar.isIndeterminate()) {
+            if (SwingUtilities.isEventDispatchThread()) {
+                this.progressBar.setIndeterminate(false);
+            } else {
+                SwingUtilities.invokeLater(() -> this.progressBar.setIndeterminate(false));
+            }
+        }
     }
 
     public void setProgress(int current, int total) {
-        this.progressBar.setIndeterminate(false);
         this.progressBar.setMaximum(total);
         this.progressBar.setValue(current);
+        if (this.progressBar.isIndeterminate()) {
+            if (SwingUtilities.isEventDispatchThread()) {
+                this.progressBar.setIndeterminate(false);
+            } else {
+                SwingUtilities.invokeLater(() -> this.progressBar.setIndeterminate(false));
+            }
+        }
     }
 
     public void setProgressValue(int val) {

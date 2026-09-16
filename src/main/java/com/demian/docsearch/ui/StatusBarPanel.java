@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 public class StatusBarPanel extends JPanel {
     private final JLabel lblStatus;
@@ -20,10 +21,18 @@ public class StatusBarPanel extends JPanel {
     }
 
     public void setStatus(String status) {
-        this.lblStatus.setText(status != null ? status : "");
+        if (SwingUtilities.isEventDispatchThread()) {
+            this.lblStatus.setText(status != null ? status : "");
+        } else {
+            SwingUtilities.invokeLater(() -> this.lblStatus.setText(status != null ? status : ""));
+        }
     }
 
     public void setCount(String count) {
-        this.lblCount.setText(count != null ? count : "");
+        if (SwingUtilities.isEventDispatchThread()) {
+            this.lblCount.setText(count != null ? count : "");
+        } else {
+            SwingUtilities.invokeLater(() -> this.lblCount.setText(count != null ? count : ""));
+        }
     }
 }

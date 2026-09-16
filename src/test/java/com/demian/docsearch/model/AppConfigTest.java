@@ -52,4 +52,29 @@ class AppConfigTest {
         assertThat(loaded.getDirectory()).isEqualTo("C:\\docs");
         assertThat(loaded.getLimit()).isEqualTo(50);
     }
+
+    @Test
+    void testAiConfigProperties(@TempDir Path tempDir) {
+        Path cfgFile = tempDir.resolve("ai_config.json");
+        ConfigManager manager = new ConfigManager(cfgFile);
+
+        AppConfig config = new AppConfig();
+        config.setAiBaseUrl("http://localhost:11434/v1");
+        config.setAiApiKey("ollama-key");
+        config.setAiModel("llama3");
+        config.setAiTemperature(0.7);
+        config.setAiTimeoutSeconds(45);
+        config.setAiParallelRequests(8);
+
+        manager.save(config);
+
+        AppConfig loaded = manager.load();
+        assertThat(loaded.isAiConfigured()).isTrue();
+        assertThat(loaded.getAiBaseUrl()).isEqualTo("http://localhost:11434/v1");
+        assertThat(loaded.getAiApiKey()).isEqualTo("ollama-key");
+        assertThat(loaded.getAiModel()).isEqualTo("llama3");
+        assertThat(loaded.getAiTemperature()).isEqualTo(0.7);
+        assertThat(loaded.getAiTimeoutSeconds()).isEqualTo(45);
+        assertThat(loaded.getAiParallelRequests()).isEqualTo(8);
+    }
 }
